@@ -16,11 +16,25 @@ import numpy
 import math
 import cv2
 import cv2.cv as cv
+from decimal import *
 
-def swt(src, searchDirection):
+def swt(name, searchDirection):
+
+    src = cv2.imread(name)
+    
     # gray image
     imgray = cv2.cvtColor(src, cv2.COLOR_BGR2GRAY)
     cv2.imwrite("gray.jpg", imgray)
+    #cv2.imshow("gray", imgray)
+
+    # detecting MSER regions
+    vis = src.copy()
+    mser = cv2.MSER()
+    regions = mser.detect(imgray, None)
+    hulls = [cv2.convexHull(p.reshape(-1, 1, 2)) for p in regions]
+    cv2.polylines(vis, hulls, 1, (0, 255, 0))
+    #print regions
+    cv2.imwrite("mser.jpg", vis)
 
     # initialize
     edgePointRows = []
@@ -30,8 +44,12 @@ def swt(src, searchDirection):
     pixels = height*width
 
     # Find edges using canny edge detector
-    edgeMap = cv2.Canny(imgray, 175, 320)
+    edgeMap = cv2.Canny(imgray, 320, 160)
     cv2.imwrite("canny.jpg", edgeMap)
+
+    vis = cv2.cvtColor(vis, cv2.COLOR_BGR2GRAY)
+    final = vis & edgeMap
+    cv2.imwrite("fin.jpg", final)
 
     # Get all edge pixel positions
     for row in range(height):
@@ -41,11 +59,17 @@ def swt(src, searchDirection):
                 edgePointCols.append(col)
 
     # Find horizontal & vertical gradients
-    dx = cv2.Sobel(imgray, cv.CV_SCHARR, 1, 0, ksize = 5)
-    dy = cv2.Sobel(imgray, cv.CV_SCHARR, 0, 1, ksize = 5)
+    dx = cv2.Sobel(imgray, cv2.CV_8U, 1, 0, ksize = 5)
+    dy = cv2.Sobel(imgray, cv2.CV_8U, 0, 1, ksize = 5)
+
+    """(minVal, maxVal, minLoc, maxLoc) = cv2.minMaxLoc(dx)
+    ret,dx = cv2.threshold(dx, 255.0/(maxVal - minVal), -minVal * 255.0/(maxVal - minVal), cv2.THRESH_BINARY)
+    (minVal, maxVal, minLoc, maxLoc) = cv2.minMaxLoc(dy)
+    ret,dy = cv2.threshold(dy, 255.0/(maxVal - minVal), -minVal * 255.0/(maxVal - minVal), cv2.THRESH_BINARY)
+"""
     cv2.imwrite("gradx.jpg", dx)
     cv2.imwrite("grady.jpg", dy)
-
+    
     # initializing matrix of gradient direction
     theta = array(random.randint(255, 256, pixels)).reshape(height, width)
 
@@ -57,7 +81,7 @@ def swt(src, searchDirection):
     cv2.imwrite("theta.jpg", theta)
 
     # initializing stroke width array with infinity
-    swtMap = array(random.randint(255, 256, pixels)).reshape(height, width)
+    swtMap = array(random.randint(255.0, 256.0, pixels)).reshape(height, width)
 
     # Set the maximum stroke width. this number is variable for now but must be
     # made to be more dynamic in the future
@@ -110,11 +134,12 @@ def swt(src, searchDirection):
                 oppositeTheta = theta[nextX][nextY]
 
                 # gradient direction roughly opposite
-                if (abs(abs(initialTheta - oppositeTheta) - pi) < pi/2.0) :
+                if (oppositeTheta >= (-initialTheta - pi/6) or oppositeTheta <= (-initialTheta + pi/6)) :
                     isStroke = 1
                     strokePointsX[sizeOfStrokePoints] = initialX
                     strokePointsY[sizeOfStrokePoints] = initialY
                     sizeOfStrokePoints += 1
+                    #print "."
 
                 break
             
@@ -141,7 +166,7 @@ def swt(src, searchDirection):
         sizeOfRay = 0
         pointOfRayX = array(random.randint(0, 1, maxStrokeWidth))
         pointOfRayY = array(random.randint(0, 1, maxStrokeWidth))
-        swtValues = array(random.randint(255, 256, maxStrokeWidth))
+        swtValues = array(random.randint(0, 1, maxStrokeWidth))
         sizeOfSWTValues = 0
 
         # record first point of the ray
@@ -185,7 +210,7 @@ def swt(src, searchDirection):
         for j in range(sizeOfRay):
             swtMap[pointOfRayX[j]][pointOfRayY[j]] = min(swtMap[pointOfRayX[j]][pointOfRayY[j]], strokeWidth)
 
-        cv2.imwrite("swt_pass2.jpg", swtMap)
+    cv2.imwrite("swt_pass2.jpg", swtMap)
+    print sizeOfStrokePoints
 
-
-swt(cv2.imread("image.jpg"), 1)
+swt("lena.jpg", -1)
